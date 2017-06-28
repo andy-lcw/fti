@@ -171,7 +171,7 @@ int do_work(int world_rank, int world_size, int checkpoint_level, int fail)
 }
 
 
-int init(char** argv, int* checkpoint_level, int* fail)
+int init(char** argv, int* checkpoint_level, int* fail, int* ckptIO)
 {
     int rtn = 0;    //return value
     if (argv[1] == NULL) {
@@ -192,6 +192,13 @@ int init(char** argv, int* checkpoint_level, int* fail)
     else {
         *fail = atoi(argv[3]);
     }
+    if (argv[4] == NULL) {
+        printf("Missing fourth parameter (ckptIO set to 1).\n");
+        *ckptIO = 1;
+    }
+    else {
+        *ckptIO = atoi(argv[4]);
+    }
     return rtn;
 }
 
@@ -202,7 +209,9 @@ int checkFileSizes(int* mpi_ranks, int world_size, int global_world_size, int le
     char* exec_id = malloc (sizeof(char) * 256);
     exec_id = iniparser_getstring(ini, "Restart:exec_id", NULL);
     int nodeSize = (int)iniparser_getint(ini, "Basic:node_size", -1);
+    int ckptIO = (int)iniparser_getint(ini, "Basic:ckpt_io", -1);
     int nodes = nodeSize ? global_world_size / nodeSize : 0;
+    int i;
     char str[256];
     char path[256];
 
@@ -225,7 +234,7 @@ int checkFileSizes(int* mpi_ranks, int world_size, int global_world_size, int le
                     int fileSize = ftell(f);
 
                     //get rank from file name
-                    int i, id, rank;
+                    int id, rank;
                     sscanf(ent->d_name, "Ckpt%d-Rank%d.fti", &id, &rank);
                     for (i = 0; i < world_size; i++) {
                         if (rank == mpi_ranks[i]) {
@@ -261,6 +270,34 @@ int checkFileSizes(int* mpi_ranks, int world_size, int global_world_size, int le
                     }
                     fclose(f);
                 }
+                if (strstr(ent->d_name , "mpiio") != NULL) {
+                    sprintf(str, "%s/%s", path, ent->d_name);
+                    FILE* f = fopen(str, "rb");
+                    fseek(f, 0L, SEEK_END);
+                    int fileSize = ftell(f);
+                    int expectedAllSizes = 0;
+                    for (i = 0; i < world_size; i++) {
+                        int expectedSize = sizeof(int) * 2; //i and size
+                        int lastCheckpointIter;
+                        if (fail) {
+                            lastCheckpointIter = ITER_STOP - ITER_STOP % ITER_CHECK;
+                        }
+                        else {
+                            lastCheckpointIter = (ITERATIONS - 1) - (ITERATIONS - 1) % ITER_CHECK;
+                        }
+                        expectedSize += ((i + 1) * INIT_SIZE + lastCheckpointIter * i) * sizeof(long);
+                        expectedAllSizes += expectedSize;
+                        printf("%d: Last checkpoint size = %d\n", i, expectedSize);
+                    }
+                    if (fileSize != expectedAllSizes) {
+                        printf("Last checkpoint file size = %d, should be %d.\n", fileSize, expectedAllSizes);
+                        fclose(f);
+                        closedir (dir);
+
+                        return 1;
+                    }
+                    fclose(f);
+                }
             }
             closedir (dir);
         }
@@ -283,13 +320,39 @@ int checkFileSizes(int* mpi_ranks, int world_size, int global_world_size, int le
 /*-------------------------------------------------------------------------*/
 int main(int argc, char** argv)
 {
-    int checkpoint_level, fail;
-    if (init(argv, &checkpoint_level, &fail)) return 0;   //verify args
+    int checkpoint_level, fail, ckptIO;
+    char str[FTI_BUFS];
+    dictionary* ini;
+    if (init(argv, &checkpoint_level, &fail, &ckptIO)) return 1;   //verify args
 
     MPI_Init(&argc, &argv);
     int global_world_rank, global_world_size;                          //MPI_COMM rank
     MPI_Comm_rank(MPI_COMM_WORLD, &global_world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &global_world_size);
+
+    if (global_world_rank == 0) {
+        ini = iniparser_load("config.fti");
+        sprintf(str, "%d", ckptIO);
+        // Set failure to 'restart'
+        iniparser_set(ini, "Basic:ckpt_io", str);
+        FILE* fd = fopen("config.fti", "w");
+        if (fd == NULL) {
+            printf("Failed to open the configuration file.");
+            iniparser_freedict(ini);
+            return 1;
+        }
+
+        // Write new configuration
+        iniparser_dump_ini(ini, fd);
+        if (fclose(fd) != 0) {
+            printf("Failed to close the configuration file.");
+            iniparser_freedict(ini);
+            return 1;
+        }
+        // Free dictionary
+        iniparser_freedict(ini);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
 
     FTI_Init(argv[1], MPI_COMM_WORLD);
     int world_rank, world_size;                     //FTI_COMM rank and size
@@ -302,7 +365,7 @@ int main(int argc, char** argv)
     int* mpi_ranks = malloc (sizeof(int) * world_size);
     MPI_Gather(&global_world_rank, 1, MPI_INT, mpi_ranks, 1, MPI_INT, 0, FTI_COMM_WORLD);
 
-    dictionary* ini = iniparser_load("config.fti");
+    ini = iniparser_load("config.fti");
     int heads = (int)iniparser_getint(ini, "Basic:head", -1);
     int nodeSize = (int)iniparser_getint(ini, "Basic:node_size", -1);
     int tag = (int)iniparser_getint(ini, "Advanced:mpi_tag", -1);

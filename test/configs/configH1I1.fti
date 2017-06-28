@@ -63,6 +63,12 @@ Group_size = 4
 # 1 (Print debug messages, very verbose)
 Verbosity = 1
 
+# The checkpoint I/O option of FTI.
+# 1 (POSIX I/O)
+# 2 (MPI I/O)
+# 3 (SIONlib)
+Ckpt_io = 1
+
 # *****************************************************************
 # *** Change these parameters ONLY in case of restart   ***********
 # *****************************************************************
