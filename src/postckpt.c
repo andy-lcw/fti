@@ -469,7 +469,7 @@ int FTI_Flush(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
             offset += chunkSizes[i];
          }
 
-         break; 
+         break;
 
 #ifdef ENABLE_SIONLIB // --> If SIONlib is installed
       case FTI_IO_SIONLIB:
@@ -535,7 +535,7 @@ int FTI_Flush(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 
          case FTI_IO_MPI:
 
-            MPI_Type_contiguous(bytes, MPI_BYTE, &dType); 
+            MPI_Type_contiguous(bytes, MPI_BYTE, &dType);
             MPI_Type_commit(&dType);
 
             res = MPI_File_write_at(FTI_Exec->pfh, offset, blBuf1, 1, dType, &status);
@@ -598,7 +598,7 @@ int FTI_FlushInit(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 {
 
    int res;
-   char str[FTI_BUFS]; 
+   char str[FTI_BUFS];
    if (level == -1) {
       return FTI_SCES; // Fake call for inline PFS checkpoint
    }
@@ -648,7 +648,7 @@ Init for the flush of locally stored checkpoint data to the PFS by POSIX
 **/
 /*-------------------------------------------------------------------------*/
 int FTI_FlushInitPosix(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level) 
+              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level)
 {
 	unsigned long maxFs, fs;
     int i, res;
@@ -668,8 +668,8 @@ int FTI_FlushInitPosix(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 
         }
 
-    } 
-	
+    }
+
     else {
 
         res = FTI_Try(FTI_GetMeta(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Ckpt, &fs, &maxFs, FTI_Topo->nodeRank, level), "obtain metadata.");
@@ -697,7 +697,7 @@ int FTI_FlushInitPosix(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 **/
 /*-------------------------------------------------------------------------*/
 int FTI_FlushInitMpi(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level) 
+      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level)
 {
    char str[FTI_BUFS], mpi_err[FTI_BUFS];
    unsigned long maxFs, fs;
@@ -750,7 +750,7 @@ int FTI_FlushInitMpi(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
    MPI_Info_set(info, "stripping_unit", "4194304");
 
    // open parallel file (collective call)
-   res = MPI_File_open(FTI_COMM_WORLD, FTI_Exec->fn, MPI_MODE_WRONLY|MPI_MODE_CREATE, info, &(FTI_Exec->pfh)); 
+   res = MPI_File_open(FTI_COMM_WORLD, FTI_Exec->fn, MPI_MODE_WRONLY|MPI_MODE_CREATE, info, &(FTI_Exec->pfh));
 
    // check if successfull
    if (res != 0) {
@@ -778,7 +778,7 @@ int FTI_FlushInitMpi(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 /*-------------------------------------------------------------------------*/
 #ifdef ENABLE_SIONLIB // --> If SIONlib is installed
 int FTI_FlushInitSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level) 
+      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level)
 {
    unsigned long maxFs, fs;
    int i, res, numFiles = 1, fsblksize = -1, nlocaltasks = 1;
@@ -826,12 +826,12 @@ int FTI_FlushInitSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
       sprintf(FTI_Exec->fn, "%s/%s", FTI_Conf->gTmpDir, str);
 
       // open parallel file in collective call for all heads
-      FTI_Exec->sid = sion_paropen_mapped_mpi(FTI_Exec->fn, "wb,posix", &numFiles, FTI_COMM_WORLD, &nlocaltasks, &gRankList, &chunkSizes, &file_map, &rank_map, &fsblksize, &dfp); 
+      FTI_Exec->sid = sion_paropen_mapped_mpi(FTI_Exec->fn, "wb,posix", &numFiles, FTI_COMM_WORLD, &nlocaltasks, &gRankList, &chunkSizes, &file_map, &rank_map, &fsblksize, &dfp);
       if (FTI_Exec->sid == -1) {
          FTI_Print("PAROPEN MAPPED ERROR", FTI_EROR);
          return FTI_NSCS;
       }
-   } 
+   }
 
    else {
       // set parallel file name
@@ -880,7 +880,7 @@ int FTI_FlushInitSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
       FTI_Exec->meta[0].maxFs = maxFs;
       strcpy(FTI_Exec->meta[0].ckptFile, FTI_Exec->ckptFile);
 
-      FTI_Exec->sid = sion_paropen_mapped_mpi(FTI_Exec->fn, "wb,posix", &numFiles, FTI_COMM_WORLD, &nlocaltasks, &gRankList, &chunkSizes, &file_map, &rank_map, &fsblksize, NULL); 
+      FTI_Exec->sid = sion_paropen_mapped_mpi(FTI_Exec->fn, "wb,posix", &numFiles, FTI_COMM_WORLD, &nlocaltasks, &gRankList, &chunkSizes, &file_map, &rank_map, &fsblksize, NULL);
       if (FTI_Exec->sid == -1) {
          FTI_Print("PAROPEN MAPPED ERROR", FTI_EROR);
          return FTI_NSCS;
@@ -900,7 +900,8 @@ int FTI_FlushInitSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 **/
 /*-------------------------------------------------------------------------*/
 int FTI_FlushFinalize(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level) 
+                      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt,
+                      FTIT_dataset* FTI_Data, int level)
 {
 
    int res;
@@ -915,18 +916,18 @@ int FTI_FlushFinalize(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 
       case FTI_IO_POSIX:
 
-         res = FTI_SCES; 
+         res = FTI_SCES;
          break;
 
       case FTI_IO_MPI:
 
-         res = FTI_FlushFinalizeMpi(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Ckpt);
+         res = FTI_FlushFinalizeMpi(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Ckpt, FTI_Data);
          break;
 
 #ifdef ENABLE_SIONLIB // --> If SIONlib is installed
       case FTI_IO_SIONLIB:
 
-         res = FTI_FlushFinalizeSionlib(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Ckpt);
+         res = FTI_FlushFinalizeSionlib(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Ckpt, FTI_Data);
          break;
 #endif
    }
@@ -944,12 +945,12 @@ int FTI_FlushFinalize(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 /*-------------------------------------------------------------------------*/
 #ifdef ENABLE_SIONLIB // --> If SIONlib is installed
 int FTI_FlushFinalizeSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt) 
+      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, FTIT_dataset* FTI_Data)
 {
 
    int res, i, j, nbSectors, save_sectorID, save_groupID;
 
-   sion_parclose_mapped_mpi(FTI_Exec->sid); 
+   sion_parclose_mapped_mpi(FTI_Exec->sid);
 
    if (FTI_Topo->amIaHead) {
 
@@ -958,7 +959,7 @@ int FTI_FlushFinalizeSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_E
 
       // update meta data
       for (i = 0; i < FTI_Topo->nbApprocs; i++) {
-         res = FTI_Try(FTI_CreateMetadata(FTI_Conf, FTI_Exec, FTI_Topo, 1, i), "create metadata.");
+         res = FTI_Try(FTI_CreateMetadata(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Data, 1, i), "create metadata.");
          if (res != FTI_SCES) {
             return FTI_NSCS;
          }
@@ -969,7 +970,7 @@ int FTI_FlushFinalizeSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_E
 
       // set parallel file name
       snprintf(FTI_Exec->ckptFile, FTI_BUFS, "Ckpt%d-sionlib.fti", FTI_Exec->ckptID);
-      res = FTI_Try(FTI_CreateMetadata(FTI_Conf, FTI_Exec, FTI_Topo, 1, 0), "create metadata.");
+      res = FTI_Try(FTI_CreateMetadata(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Data, 1, 0), "create metadata.");
       if (res != FTI_SCES) {
          return FTI_NSCS;
       }
@@ -988,7 +989,7 @@ int FTI_FlushFinalizeSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_E
 **/
 /*-------------------------------------------------------------------------*/
 int FTI_FlushFinalizeMpi(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt) 
+      FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, FTIT_dataset* FTI_Data)
 {
 
    int res, i, j, nbSectors, save_sectorID, save_groupID;
@@ -1003,7 +1004,7 @@ int FTI_FlushFinalizeMpi(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 
       // update meta data
       for (i = 0; i < FTI_Topo->nbApprocs; i++) {
-         res = FTI_Try(FTI_CreateMetadata(FTI_Conf, FTI_Exec, FTI_Topo, 1, i), "create metadata.");
+         res = FTI_Try(FTI_CreateMetadata(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Data, 1, i), "create metadata.");
          if (res != FTI_SCES) {
             return FTI_NSCS;
          }
@@ -1014,7 +1015,7 @@ int FTI_FlushFinalizeMpi(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 
       // set parallel file name
       snprintf(FTI_Exec->ckptFile, FTI_BUFS, "Ckpt%d-mpiio.fti", FTI_Exec->ckptID);
-      res = FTI_Try(FTI_CreateMetadata(FTI_Conf, FTI_Exec, FTI_Topo, 1, 0), "create metadata.");
+      res = FTI_Try(FTI_CreateMetadata(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Data, 1, 0), "create metadata.");
       if (res != FTI_SCES) {
          return FTI_NSCS;
       }

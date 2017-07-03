@@ -149,7 +149,7 @@ int FTI_WriteRSedChecksum(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec
 
     return FTI_SCES;
 }
-    
+
 /*-------------------------------------------------------------------------*/
 /**
     @brief      It gets the ptner file size from metadata.
@@ -189,6 +189,55 @@ int FTI_GetPtnerSize(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo,
     sprintf(str, "%d:Ckpt_file_size", (FTI_Topo->groupRank + FTI_Topo->groupSize - 1) % FTI_Topo->groupSize);
     *pfs = iniparser_getlint(ini, str, -1);
     iniparser_freedict(ini);
+
+    return FTI_SCES;
+}
+
+/*-------------------------------------------------------------------------*/
+/**
+    @brief      It gets the variable size from metadata.
+    @param      varSize         Pointer to fill the variable size.
+    @param      id              The id of protected variable.
+    @return     integer         FTI_SCES if successfull.
+
+    This function reads the metadata file created during checkpointing and
+    reads protected variable size.
+
+ **/
+/*-------------------------------------------------------------------------*/
+int FTI_GetVarSize(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
+                    FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt,
+                    long* varSize, int id)
+{
+    dictionary* ini;
+    char mfn[FTI_BUFS], str[FTI_BUFS], *cfn;
+    int i;
+    sprintf(mfn, "%s/sector%d-group%d.fti", FTI_Ckpt[FTI_Exec->ckptLvel].metaDir, FTI_Topo->sectorID, FTI_Topo->groupID);
+    sprintf(str, "Getting FTI metadata file (%s)...", mfn);
+    FTI_Print(str, FTI_DBUG);
+    if (access(mfn, R_OK) != 0) {
+        FTI_Print("FTI metadata file NOT accessible.", FTI_DBUG);
+        return FTI_NSCS;
+    }
+    ini = iniparser_load(mfn);
+    if (ini == NULL) {
+        FTI_Print("Iniparser failed to parse the metadata file.", FTI_WARN);
+        return FTI_NSCS;
+    }
+    long* allVarSizes = talloc(long, FTI_Topo->groupSize);
+    if (FTI_Topo->groupRank == 0) {
+        for (i = 0; i < FTI_Topo->groupSize; i++) {
+            sprintf(str, "%d:Var%u_size", i, id);
+            allVarSizes[i] = iniparser_getlint(ini, str, -1);
+            sprintf(str, "Variable (proc %d) size: %ld", i, allVarSizes[i]);
+            FTI_Print(str, FTI_WARN);
+        }
+    }
+
+    MPI_Scatter(allVarSizes, 1, MPI_LONG, varSize, 1, MPI_LONG, 0, FTI_Exec->groupComm);
+
+    iniparser_freedict(ini);
+    free(allVarSizes);
 
     return FTI_SCES;
 }
@@ -260,11 +309,13 @@ int FTI_GetMeta(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
  **/
 /*-------------------------------------------------------------------------*/
 int FTI_WriteMetadata(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo,
-                      unsigned long* fs, unsigned long mfs, char* fnl, char* checksums, int member)
+                      unsigned long* fs, unsigned long mfs, char* fnl,
+                      char* checksums, int member, long* allVarSizes,
+                      int* allVarIds, unsigned int maxNbVar)
 {
     char str[FTI_BUFS], buf[FTI_BUFS];
     dictionary* ini;
-    int i, groupID;
+    int i, j, groupID;
 
     snprintf(buf, FTI_BUFS, "%s/Topology.fti", FTI_Conf->metadDir);
     sprintf(str, "Temporary load of topology file (%s)...", buf);
@@ -296,6 +347,12 @@ int FTI_WriteMetadata(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo,
         if (strlen(checksums)) {
             strncpy(buf, checksums + (i * MD5_DIGEST_LENGTH), MD5_DIGEST_LENGTH);
             sprintf(str, "%d:Ckpt_checksum", i);
+            iniparser_set(ini, str, buf);
+        }
+
+        for (j = 0; j < maxNbVar; j++) {
+            sprintf(buf, "%ld", allVarSizes[i * maxNbVar + j]);
+            sprintf(str, "%d:Var%u_size", i, allVarIds[j]);
             iniparser_set(ini, str, buf);
         }
     }
@@ -366,7 +423,8 @@ int FTI_WriteMetadata(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo,
  **/
 /*-------------------------------------------------------------------------*/
 int FTI_CreateMetadata(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-                       FTIT_topology* FTI_Topo, int globalTmp, int member)
+                       FTIT_topology* FTI_Topo, FTIT_dataset* FTI_Data,
+                       int globalTmp, int member)
 {
     char* fnl = talloc(char, FTI_Topo->groupSize* FTI_BUFS);
     unsigned long fs[FTI_BUFS], mfs, tmpo;
@@ -391,7 +449,7 @@ int FTI_CreateMetadata(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
     }
     sprintf(str, "Checkpoint file size : %ld bytes.", fs[FTI_Topo->groupRank]);
     FTI_Print(str, FTI_DBUG);
-    
+
     sprintf(fnl + (FTI_Topo->groupRank * FTI_BUFS), "%s", FTI_Exec->ckptFile);
     tmpo = fs[FTI_Topo->groupRank]; // Gather all the file sizes
     MPI_Allgather(&tmpo, 1, MPI_UNSIGNED_LONG, fs, 1, MPI_UNSIGNED_LONG, FTI_Exec->groupComm);
@@ -403,10 +461,10 @@ int FTI_CreateMetadata(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
             mfs = fs[i]; // Search max. size
         }
     }
-    FTI_Exec->meta[0].maxFs; 
+    FTI_Exec->meta[0].maxFs;
     sprintf(str, "Max. file size %ld.", mfs);
     FTI_Print(str, FTI_DBUG);
-    
+
     // TODO Checksums only local currently
     char* checksums;
     if (!globalTmp) {
@@ -424,11 +482,33 @@ int FTI_CreateMetadata(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
         return FTI_NSCS;
     }
 
+    unsigned int maxNbVar;
+    MPI_Allreduce(&FTI_Exec->nbVar, &maxNbVar, 1, MPI_UNSIGNED, MPI_MAX, FTI_Exec->groupComm);
+
+    long* varSizes = talloc(long, maxNbVar);
+    int* varIds = talloc(int, maxNbVar);
+    for (i = 0; i < FTI_Exec->nbVar; i++) {
+        varSizes[i] = FTI_Data[i].size;
+        varIds[i] = FTI_Data[i].id;
+    }
+    for (i = FTI_Exec->nbVar; i < maxNbVar; i++) {
+        varSizes[i] = -1;
+        varIds[i] = -1;
+    }
+    long* allVarSizes = talloc(long, FTI_Topo->groupSize * maxNbVar);
+    int* allVarIds = talloc(int, FTI_Topo->groupSize * maxNbVar);
+    MPI_Gather(varSizes, maxNbVar, MPI_LONG, allVarSizes, maxNbVar, MPI_LONG, 0, FTI_Exec->groupComm);
+    MPI_Gather(varIds, maxNbVar, MPI_INT, allVarIds, maxNbVar, MPI_INT, 0, FTI_Exec->groupComm);
+
     if (FTI_Topo->groupRank == 0) { // Only one process in the group create the metadata
-        res = FTI_Try(FTI_WriteMetadata(FTI_Conf, FTI_Topo, fs, mfs, fnl, checksums, member), "write the metadata.");
+        res = FTI_Try(FTI_WriteMetadata(FTI_Conf, FTI_Topo, fs, mfs, fnl, checksums, member, allVarSizes, allVarIds, maxNbVar), "write the metadata.");
         if (res == FTI_NSCS) {
             free(fnl);
             free(checksums);
+            free(varSizes);
+            free(varIds);
+            free(allVarSizes);
+            free(allVarIds);
 
             return FTI_NSCS;
         }
@@ -436,6 +516,10 @@ int FTI_CreateMetadata(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 
     free(fnl);
     free(checksums);
+    free(varSizes);
+    free(varIds);
+    free(allVarSizes);
+    free(allVarIds);
 
     return FTI_SCES;
 }

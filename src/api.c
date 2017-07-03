@@ -107,7 +107,7 @@ int FTI_Init(char* configFile, MPI_Comm globalComm)
     }
     MPI_Barrier(FTI_Exec.globalComm); //wait for myRank == 0 process to save config file
     if (FTI_Topo.amIaHead) { // If I am a FTI dedicated process
-        FTI_Exec.meta = talloc(FTIT_metadata,FTI_Topo.nbApprocs); 
+        FTI_Exec.meta = talloc(FTIT_metadata,FTI_Topo.nbApprocs);
         if (FTI_Exec.reco) {
             res = FTI_Try(FTI_RecoverFiles(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt), "recover the checkpoint files.");
             if (res != FTI_SCES) {
@@ -116,13 +116,13 @@ int FTI_Init(char* configFile, MPI_Comm globalComm)
         }
         res = 0;
         while (res != FTI_ENDW) {
-            res = FTI_Listen(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt);
+            res = FTI_Listen(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt, FTI_Data);
         }
         FTI_Print("Head stopped listening.", FTI_DBUG);
         FTI_Finalize();
     }
     else { // If I am an application process
-        FTI_Exec.meta = talloc(FTIT_metadata,1); 
+        FTI_Exec.meta = talloc(FTIT_metadata,1);
         if (FTI_Exec.reco) {
             res = FTI_Try(FTI_RecoverFiles(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt), "recover the checkpoint files.");
             if (res != FTI_SCES) {
@@ -231,6 +231,43 @@ int FTI_Protect(int id, void* ptr, long count, FTIT_type type)
         FTI_Print(str, FTI_INFO);
     }
     return FTI_SCES;
+}
+
+/*-------------------------------------------------------------------------*/
+/**
+    @brief      Reallocates dataset to last checkpoint size.
+    @param      id              Variable ID.
+    @param      ptr             Pointer to the variable.
+    @return     ptr             Pointer if successful, NULL otherwise
+    This function loads the checkpoint data size from the metadata
+    file, reallacates memory and updates data size information.
+ **/
+/*-------------------------------------------------------------------------*/
+void* FTI_Realloc(int id, void* ptr) {
+    FTI_Print("Trying to reallocate dataset.", FTI_DBUG);
+    if (FTI_Exec.reco) {
+        char fn[FTI_BUFS], str[FTI_BUFS];
+        int i;
+        long varSize;
+        FTI_GetVarSize(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt, &varSize, id);
+
+        for (i = 0; i < FTI_BUFS; i++) {
+            if (id == FTI_Data[i].id) {
+                FTI_Data[i].size = varSize;
+                sprintf(str, "Reallocated size: %ld", varSize);
+                FTI_Print(str, FTI_WARN);
+                ptr = realloc (ptr, FTI_Data[i].size);
+                FTI_Data[i].ptr = ptr;
+                sprintf(str, "Dataset #%d reallocated.", FTI_Data[i].id);
+                FTI_Print(str, FTI_DBUG);
+                break;
+            }
+        }
+    }
+    else {
+        FTI_Print("This is not a recovery. Couldn't reallocate memory.", FTI_WARN);
+    }
+    return ptr;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -358,7 +395,7 @@ int FTI_Checkpoint(int id, int level)
     MPI_Status status;
     if ((level > 0) && (level < 5)) {
         t0 = MPI_Wtime();
-        FTI_Exec.ckptLvel = level; // (1) TODO #BUG? this should come after (2) 
+        FTI_Exec.ckptLvel = level; // (1) TODO #BUG? this should come after (2)
         // str is set to print ckpt information on stdout
         sprintf(catstr, "Ckpt. ID %d", FTI_Exec.ckptID);
         sprintf(str, "%s (L%d) (%.2f MB/proc)", catstr, FTI_Exec.ckptLvel, FTI_Exec.ckptSize / (1024.0 * 1024.0));
@@ -388,7 +425,7 @@ int FTI_Checkpoint(int id, int level)
             if (res != FTI_SCES) {
                 FTI_Exec.ckptLvel = FTI_REJW - FTI_BASE;
             }
-            res = FTI_Try(FTI_PostCkpt(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt, FTI_Topo.groupID, -1, 1), "postprocess the checkpoint.");
+            res = FTI_Try(FTI_PostCkpt(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt, FTI_Data, FTI_Topo.groupID, -1, 1), "postprocess the checkpoint.");
             if (res == FTI_SCES) {
                 FTI_Exec.wasLastOffline = 0;
                 FTI_Exec.lastCkptLvel = FTI_Exec.ckptLvel;
@@ -556,7 +593,7 @@ int FTI_Finalize()
         if (FTI_Exec.lastCkptLvel != 4) {
             FTI_Try(FTI_FlushInit(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt, FTI_Exec.lastCkptLvel), "Initialize flush to the PFS.");
             FTI_Try(FTI_Flush(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt, FTI_Topo.groupID, FTI_Exec.lastCkptLvel), "save the last ckpt. in the PFS.");
-            FTI_Try(FTI_FlushFinalize(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt, FTI_Exec.lastCkptLvel), "Finalize flush to the PFS.");
+            FTI_Try(FTI_FlushFinalize(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt, FTI_Data, FTI_Exec.lastCkptLvel), "Finalize flush to the PFS.");
             MPI_Barrier(FTI_COMM_WORLD);
             if (FTI_Topo.splitRank == 0) {
                 if (access(FTI_Ckpt[4].dir, 0) == 0) {

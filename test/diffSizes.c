@@ -98,18 +98,11 @@ int do_work(int world_rank, int world_size, int checkpoint_level, int fail)
     FTI_Protect(2, buf, its.size, FTI_LONG);
     //checking if this is recovery run
     if (FTI_Status() != 0 && fail == 0) {
-        /* when we add FTI_Realloc();
         buf = FTI_Realloc(2, buf);
         if (buf == NULL) {
             printf("%d: Reallocation failed!\n", world_rank);
             return RECOVERY_FAILED;
         }
-        */
-
-        //need to call FTI_Recover twice to get all data
-        res = FTI_Recover();
-        buf = realloc (buf, sizeof(long) * its.size);
-        FTI_Protect(2, buf, its.size, FTI_LONG);
         res = FTI_Recover();
         if (res != 0) {
             printf("%d: Recovery failed! FTI_Recover returned %d.\n", world_rank, res);
@@ -129,9 +122,6 @@ int do_work(int world_rank, int world_size, int checkpoint_level, int fail)
             return RECOVERY_FAILED;
         }
         int recoverySize = 2 * sizeof(int); //i and size
-        /* when we add FTI_Realloc();
-        recoverySize += 3 * sizeof(long); //counts
-        */
         for (j = 0; j < its.size; j++) {
             if (buf[j] != its.i * world_rank) {
                 printf("%d: Recovery size = %d MB\n", world_rank, recoverySize/1024/1024);
@@ -243,9 +233,7 @@ int checkFileSizes(int* mpi_ranks, int world_size, int global_world_size, int le
                     }
 
                     int expectedSize = 0;
-                    /* when we add FTI_Realloc();
-                    expectedSize += sizeof(long) * 2; //(i and size) length
-                    */
+
                     expectedSize += sizeof(int) * 2; //i and size
 
                     int lastCheckpointIter;

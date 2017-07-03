@@ -125,6 +125,7 @@ startTestLogVerify () {
 	cp configs/$2 config.fti
 	mpirun -n $3 ./$1 config.fti $4 1 &> logFile1
 	if [ $? != 0 ]; then
+		cat logFile1
 		exit 1
 	fi
 	checkLog logFile1 patterns/L"$4INIT" 0
@@ -132,6 +133,7 @@ startTestLogVerify () {
 	printResume $1 $2 $4
 	mpirun -n $3 ./$1 config.fti $4 0 &> logFile2
 	if [ $? != 0 ]; then
+		cat logFile1 logFile2
 		exit 1
 	fi
 	checkLog logFile2 patterns/L"$4""Clean""$level" 0

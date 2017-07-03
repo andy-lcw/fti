@@ -68,9 +68,10 @@ int FTI_GroupClean(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo,
                    FTIT_checkpoint* FTI_Ckpt, int level, int group, int pr);
 int FTI_PostCkpt(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
                  FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt,
-                 int group, int fo, int pr);
+                 FTIT_dataset* FTI_Data, int group, int fo, int pr);
 int FTI_Listen(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-               FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt);
+               FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt,
+               FTIT_dataset* FTI_Data);
 
 int FTI_UpdateConf(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
                    int restart);
@@ -97,10 +98,16 @@ int FTI_GetPtnerSize(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo,
 int FTI_GetMeta(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
                 FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt,
                 unsigned long *fs, unsigned long *mfs, int group, int level);
+int FTI_GetVarSize(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
+                    FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt,
+                    long* varSize, int id);
 int FTI_WriteMetadata(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo,
-                      unsigned long *fs, unsigned long mfs, char* fnl, char* checksums, int member);
+                      unsigned long* fs, unsigned long mfs, char* fnl,
+                      char* checksums, int member, long* allVarSizes,
+                      int* allVarIds, unsigned int maxNbVar);
 int FTI_CreateMetadata(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-                       FTIT_topology* FTI_Topo, int globalTmp, int member);
+                       FTIT_topology* FTI_Topo,FTIT_dataset* FTI_Data,
+                       int globalTmp, int member);
 
 int FTI_Local(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
               FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int group);
@@ -109,24 +116,26 @@ int FTI_Ptner(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
 int FTI_RSenc(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
               FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int group);
 int FTI_FlushInit(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level); 
+              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level);
 int FTI_FlushInitPosix(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level); 
+              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level);
 #ifdef ENABLE_SIONLIB // --> If SIONlib is installed
 int FTI_FlushInitSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level); 
+              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level);
 #endif
 int FTI_FlushInitMpi(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level); 
+              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level);
 int FTI_Flush(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
               FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int group, int level);
 int FTI_FlushFinalize(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, int level); 
+              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt, FTIT_dataset* FTI_Data,
+              int level);
 int FTI_FlushFinalizeMpi(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt); 
+              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt,
+              FTIT_dataset* FTI_Data);
 #ifdef ENABLE_SIONLIB // --> If SIONlib is installed
 int FTI_FlushFinalizeSionlib(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
-              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt); 
+              FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt);
 #endif
 int FTI_Decode(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
                FTIT_topology* FTI_Topo, FTIT_checkpoint* FTI_Ckpt,

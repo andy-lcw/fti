@@ -231,7 +231,7 @@ typedef struct FTIT_checkpoint {        /** Checkpoint metadata.           */
     int             isInline;           /** TRUE if work is inline.        */
     int             ckptIntv;           /** Checkpoint interval.           */
     int             ckptCnt;            /** Checkpoint counter.            */
-    
+
 } FTIT_checkpoint;
 
 /** @typedef    FTIT_injection
@@ -287,6 +287,7 @@ int FTI_Init(char *configFile, MPI_Comm globalComm);
 int FTI_Status();
 int FTI_InitType(FTIT_type* type, int size);
 int FTI_Protect(int id, void* ptr, long count, FTIT_type type);
+void* FTI_Realloc(int id, void* ptr);
 int FTI_BitFlip(int datasetID);
 int FTI_Checkpoint(int id, int level);
 int FTI_Recover();
