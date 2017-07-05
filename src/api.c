@@ -89,10 +89,9 @@ int FTI_Init(char* configFile, MPI_Comm globalComm)
     MPI_Comm_rank(FTI_Exec.globalComm, &FTI_Topo.myRank);
     MPI_Comm_size(FTI_Exec.globalComm, &FTI_Topo.nbProc);
     snprintf(FTI_Conf.cfgFile, FTI_BUFS, "%s", configFile);
-    FTI_Conf.verbosity = 1;
+    FTI_Conf.verbosity = 1; //needed for FTI_Print
     FTI_Inje.timer = MPI_Wtime();
-    FTI_COMM_WORLD = globalComm; // Temporary before building topology
-    FTI_Topo.splitRank = FTI_Topo.myRank; // Temporary before building topology
+    FTI_Topo.splitRank = FTI_Topo.myRank; // Temporary before building topology, needed for FTI_Print
     int res = FTI_Try(FTI_LoadConf(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt, &FTI_Inje), "load configuration.");
     if (res == FTI_NSCS) {
         FTI_Abort();
@@ -114,12 +113,7 @@ int FTI_Init(char* configFile, MPI_Comm globalComm)
                 FTI_Abort();
             }
         }
-        res = 0;
-        while (res != FTI_ENDW) {
-            res = FTI_Listen(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt);
-        }
-        FTI_Print("Head stopped listening.", FTI_DBUG);
-        FTI_Finalize();
+        FTI_Listen(&FTI_Conf, &FTI_Exec, &FTI_Topo, FTI_Ckpt);  //endless loop, head can finalize only by calling FTI_Finalize
     }
     else { // If I am an application process
         FTI_Exec.meta = talloc(FTIT_metadata,1);
@@ -192,7 +186,6 @@ int FTI_Protect(int id, void* ptr, long count, FTIT_type type)
 {
     int i, prevSize, updated = 0;
     char str[FTI_BUFS];
-    float ckptSize;
     for (i = 0; i < FTI_BUFS; i++) {
         if (id == FTI_Data[i].id) {
             prevSize = FTI_Data[i].size;
@@ -202,34 +195,32 @@ int FTI_Protect(int id, void* ptr, long count, FTIT_type type)
             FTI_Data[i].eleSize = type.size;
             FTI_Data[i].size = type.size * count;
             FTI_Exec.ckptSize = FTI_Exec.ckptSize + (type.size * count) - prevSize;
-            updated = 1;
+            sprintf(str, "Variable ID %d reseted. Current ckpt. size per rank is %.2fMB.",
+                    id, FTI_Exec.ckptSize / (1024.0 * 1024.0));
+            FTI_Print(str, FTI_DBUG);
+            return FTI_SCES;
         }
     }
-    if (updated) {
-        ckptSize = FTI_Exec.ckptSize / (1024.0 * 1024.0);
-        sprintf(str, "Variable ID %d reseted. Current ckpt. size per rank is %.2fMB.", id, ckptSize);
-        FTI_Print(str, FTI_DBUG);
+
+    if (FTI_Exec.nbVar >= FTI_BUFS) {
+        FTI_Print("Too many variables registered.", FTI_EROR);
+        FTI_Clean(&FTI_Conf, &FTI_Topo, FTI_Ckpt, 5, FTI_Topo.groupID, FTI_Topo.myRank);
+        MPI_Abort(MPI_COMM_WORLD, -1);
+        MPI_Finalize();
+        exit(1);
     }
-    else {
-        if (FTI_Exec.nbVar >= FTI_BUFS) {
-            FTI_Print("Too many variables registered.", FTI_EROR);
-            FTI_Clean(&FTI_Conf, &FTI_Topo, FTI_Ckpt, 5, FTI_Topo.groupID, FTI_Topo.myRank);
-            MPI_Abort(MPI_COMM_WORLD, -1);
-            MPI_Finalize();
-            exit(1);
-        }
-        FTI_Data[FTI_Exec.nbVar].id = id;
-        FTI_Data[FTI_Exec.nbVar].ptr = ptr;
-        FTI_Data[FTI_Exec.nbVar].count = count;
-        FTI_Data[FTI_Exec.nbVar].type = type;
-        FTI_Data[FTI_Exec.nbVar].eleSize = type.size;
-        FTI_Data[FTI_Exec.nbVar].size = type.size * count;
-        FTI_Exec.nbVar = FTI_Exec.nbVar + 1;
-        FTI_Exec.ckptSize = FTI_Exec.ckptSize + (type.size * count);
-        ckptSize = FTI_Exec.ckptSize / (1024.0 * 1024.0);
-        sprintf(str, "Variable ID %d to protect. Current ckpt. size per rank is %.2fMB.", id, ckptSize);
-        FTI_Print(str, FTI_INFO);
-    }
+    FTI_Data[FTI_Exec.nbVar].id = id;
+    FTI_Data[FTI_Exec.nbVar].ptr = ptr;
+    FTI_Data[FTI_Exec.nbVar].count = count;
+    FTI_Data[FTI_Exec.nbVar].type = type;
+    FTI_Data[FTI_Exec.nbVar].eleSize = type.size;
+    FTI_Data[FTI_Exec.nbVar].size = type.size * count;
+    FTI_Exec.nbVar = FTI_Exec.nbVar + 1;
+    FTI_Exec.ckptSize = FTI_Exec.ckptSize + (type.size * count);
+    sprintf(str, "Variable ID %d added to protect. Current ckpt. size per rank is %.2fMB.",
+            id, FTI_Exec.ckptSize / (1024.0 * 1024.0));
+    FTI_Print(str, FTI_INFO);
+
     return FTI_SCES;
 }
 
@@ -360,12 +351,11 @@ int FTI_Checkpoint(int id, int level)
         t0 = MPI_Wtime();
         FTI_Exec.ckptLvel = level; // (1) TODO #BUG? this should come after (2)
         // str is set to print ckpt information on stdout
-        sprintf(catstr, "Ckpt. ID %d", FTI_Exec.ckptID);
-        sprintf(str, "%s (L%d) (%.2f MB/proc)", catstr, FTI_Exec.ckptLvel, FTI_Exec.ckptSize / (1024.0 * 1024.0));
+        sprintf(catstr, "Ckpt. ID %u (L%d) (%.2f MB/proc)", FTI_Exec.ckptID,
+                FTI_Exec.ckptLvel, FTI_Exec.ckptSize / (1024.0 * 1024.0));
         if (FTI_Exec.wasLastOffline == 1) { // Block until previous checkpoint is done (Async. work)
             MPI_Recv(&res, 1, MPI_INT, FTI_Topo.headRank, FTI_Conf.tag, FTI_Exec.globalComm, &status);
             if (res == FTI_SCES) {
-                FTI_Exec.lastCkptLvel = res; // TODO why this assignment ??
                 FTI_Exec.wasLastOffline = 1;
                 FTI_Exec.lastCkptLvel = FTI_Exec.ckptLvel; // (2) TODO look at (1)
             }
@@ -395,8 +385,8 @@ int FTI_Checkpoint(int id, int level)
             }
         }
         t3 = MPI_Wtime();
-        sprintf(catstr, "%s taken in %.2f sec.", str, t3 - t0);
-        sprintf(str, "%s (Wt:%.2fs, Wr:%.2fs, Ps:%.2fs)", catstr, t1 - t0, t2 - t1, t3 - t2);
+        sprintf(str, "%s taken in %.2f sec. (Wt:%.2fs, Wr:%.2fs, Ps:%.2fs)",
+                catstr, t3 - t0, t1 - t0, t2 - t1, t3 - t2);
         FTI_Print(str, FTI_INFO);
         if (res != FTI_NSCS) {
             res = FTI_DONE;

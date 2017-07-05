@@ -53,14 +53,7 @@ int FTI_UpdateConf(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec, int r
 
     // Write new configuration
     iniparser_dump_ini(ini, fd);
-    if (fflush(fd) != 0) {
-        FTI_Print("FTI failed to flush the configuration file.", FTI_EROR);
 
-        iniparser_freedict(ini);
-        fclose(fd);
-
-        return FTI_NSCS;
-    }
     if (fclose(fd) != 0) {
         FTI_Print("FTI failed to close the configuration file.", FTI_EROR);
 
@@ -297,7 +290,8 @@ int FTI_TestConfig(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo,
 
  **/
 /*-------------------------------------------------------------------------*/
-int FTI_TestDirectories(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo)
+int FTI_TestDirectories(FTIT_configuration* FTI_Conf,  FTIT_execution* FTI_Exec,
+                        FTIT_topology* FTI_Topo)
 {
     char str[FTI_BUFS];
 
@@ -333,7 +327,7 @@ int FTI_TestDirectories(FTIT_configuration* FTI_Conf, FTIT_topology* FTI_Topo)
         }
     }
     //Waiting for metadDir being created
-    MPI_Barrier(FTI_COMM_WORLD);
+    MPI_Barrier(FTI_Exec->globalComm);
 
     return FTI_SCES;
 }
@@ -428,7 +422,7 @@ int FTI_LoadConf(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
         FTI_Print("Wrong configuration.", FTI_WARN);
         return FTI_NSCS;
     }
-    res = FTI_Try(FTI_TestDirectories(FTI_Conf, FTI_Topo), "pass the directories test.");
+    res = FTI_Try(FTI_TestDirectories(FTI_Conf, FTI_Exec, FTI_Topo), "pass the directories test.");
     if (res == FTI_NSCS) {
         FTI_Print("Problem with the directories.", FTI_WARN);
         return FTI_NSCS;

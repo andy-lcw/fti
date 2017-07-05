@@ -279,35 +279,36 @@ int FTI_Listen(FTIT_configuration* FTI_Conf, FTIT_execution* FTI_Exec,
     for (i = 0; i < 7; i++) { // Initialize flags
         flags[i] = 0;
     }
-    FTI_Print("Head listening...", FTI_DBUG);
-    for (i = 0; i < FTI_Topo->nbApprocs; i++) { // Iterate on the application processes in the node
-        MPI_Recv(&buf, 1, MPI_INT, FTI_Topo->body[i], FTI_Conf->tag, FTI_Exec->globalComm, &status);
-        sprintf(str, "The head received a %d message", buf);
-        FTI_Print(str, FTI_DBUG);
-        fflush(stdout);
-        flags[buf - FTI_BASE] = flags[buf - FTI_BASE] + 1;
-    }
-    for (i = 1; i < 7; i++) {
-        if (flags[i] == FTI_Topo->nbApprocs) { // Determining checkpoint level
-            FTI_Exec->ckptLvel = i;
+    while (1) {
+        FTI_Print("Head listening...", FTI_DBUG);
+        for (i = 0; i < FTI_Topo->nbApprocs; i++) { // Iterate on the application processes in the node
+            MPI_Recv(&buf, 1, MPI_INT, FTI_Topo->body[i], FTI_Conf->tag, FTI_Exec->globalComm, &status);
+            sprintf(str, "The head received a %d message", buf);
+            FTI_Print(str, FTI_DBUG);
+            flags[buf - FTI_BASE] = flags[buf - FTI_BASE] + 1;
+        }
+        for (i = 1; i < 7; i++) {
+            if (flags[i] == FTI_Topo->nbApprocs) { // Determining checkpoint level
+                FTI_Exec->ckptLvel = i;
+            }
+        }
+        if (flags[6] > 0) {
+            FTI_Exec->ckptLvel = 6;
+        }
+        if (FTI_Exec->ckptLvel == 5) { // If we were asked to finalize
+            FTI_Print("Head stopped listening.", FTI_DBUG);
+            FTI_Finalize();
+        }
+        res = FTI_Try(FTI_PostCkpt(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Ckpt, 1, 0, FTI_Topo->nbApprocs), "postprocess the checkpoint.");
+        if (res == FTI_SCES) {
+            FTI_Exec->wasLastOffline = 1;
+            FTI_Exec->lastCkptLvel = FTI_Exec->ckptLvel;
+            res = FTI_Exec->ckptLvel;
+        }
+        for (i = 0; i < FTI_Topo->nbApprocs; i++) { // Send msg. to avoid checkpoint collision
+            MPI_Send(&res, 1, MPI_INT, FTI_Topo->body[i], FTI_Conf->tag, FTI_Exec->globalComm);
         }
     }
-    if (flags[6] > 0) {
-        FTI_Exec->ckptLvel = 6;
-    }
-    if (FTI_Exec->ckptLvel == 5) { // If we were asked to finalize
-        return FTI_ENDW;
-    }
-    res = FTI_Try(FTI_PostCkpt(FTI_Conf, FTI_Exec, FTI_Topo, FTI_Ckpt, 1, 0, FTI_Topo->nbApprocs), "postprocess the checkpoint.");
-    if (res == FTI_SCES) {
-        FTI_Exec->wasLastOffline = 1;
-        FTI_Exec->lastCkptLvel = FTI_Exec->ckptLvel;
-        res = FTI_Exec->ckptLvel;
-    }
-    for (i = 0; i < FTI_Topo->nbApprocs; i++) { // Send msg. to avoid checkpoint collision
-        MPI_Send(&res, 1, MPI_INT, FTI_Topo->body[i], FTI_Conf->tag, FTI_Exec->globalComm);
-    }
-    return FTI_SCES;
 }
 
 /*-------------------------------------------------------------------------*/
