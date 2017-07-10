@@ -19,6 +19,9 @@
 #include <math.h>
 #include <fti.h>
 
+#include "../deps/iniparser/iniparser.h"
+#include "../deps/iniparser/dictionary.h"
+
 //do not change this defines (static verifying)
 #define PRECISION   0.005
 #define ITER_TIMES  5000
@@ -26,7 +29,6 @@
 #define WORKTAG     50
 #define REDUCE      5
 
-#define ITER_STOP 3100    //simulate failure after ITER_STOP iterations
 
 #define WORK_DONE 0
 #define WORK_STOPED 1
@@ -92,7 +94,7 @@ double doWork(int numprocs, int rank, int M, int nbLines, double *g, double *h)
     return localerror;
 }
 
-int init(char** argv, int* fail)
+int init(char** argv, int* checkpoint_level, int* fail)
 {
     int rtn = 0;    //return value
     if (argv[1] == NULL) {
@@ -100,11 +102,18 @@ int init(char** argv, int* fail)
         rtn = 1;
     }
     if (argv[2] == NULL) {
+        printf("Missing second parameter (checkpiont level).\n");
+        rtn = 1;
+    }
+    else {
+        *checkpoint_level = atoi(argv[2]);
+    }
+    if (argv[3] == NULL) {
         printf("Missing third parameter (if fail).\n");
         rtn = 1;
     }
     else {
-        *fail = atoi(argv[2]);
+        *fail = atoi(argv[3]);
     }
     return rtn;
 }
@@ -124,20 +133,65 @@ int verify (double globalerror, int rank) {
 /*-------------------------------------------------------------------------*/
 int main(int argc, char** argv)
 {
-    int fail, rank, nbProcs, nbLines, i, M, arg;
+    int checkpoint_level, fail, rank, nbProcs, nbLines, i, M, arg;
     double wtime, *h, *g, memSize, localerror, globalerror = 1;
 
-    if (init(argv, &fail)) {
+    if (init(argv, &checkpoint_level, &fail)) {
         return 0;   //verify args
     }
 
     MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    if (rank == 0) {
+        dictionary* ini = iniparser_load("config.fti");
+        if (ini == NULL) {
+            printf("Iniparser failed to parse the conf. file.");
+            MPI_Abort(MPI_COMM_WORLD, 0);
+        }
+        char str[14];
+        sprintf(str, "Basic:Ckpt_L%d", checkpoint_level);
+        iniparser_set(ini, str, "1");
+
+        FILE * fd = fopen("config.fti", "w");
+        if (fd == NULL) {
+            printf("Failed to open the conf. file.");
+            iniparser_freedict(ini);
+            MPI_Abort(MPI_COMM_WORLD, 0);
+        }
+        iniparser_dump_ini(ini, fd);
+        if (fclose(fd) != 0) {
+            printf("Failed to close the conf. file.");
+            iniparser_freedict(ini);
+            MPI_Abort(MPI_COMM_WORLD, 0);
+        }
+        iniparser_freedict(ini);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+
     FTI_Init(argv[1], MPI_COMM_WORLD);
 
     MPI_Comm_size(FTI_COMM_WORLD, &nbProcs);
     MPI_Comm_rank(FTI_COMM_WORLD, &rank);
 
-    arg = 4;
+    char compiler[10];
+    if (getenv ("MPICC")) {
+        sprintf(compiler, "icc");
+    }
+    else if (getenv ("USE_PGI")) {
+        sprintf(compiler, "pgi");
+    }
+
+    if (!strcmp(compiler, "icc")) {
+        arg = 12;
+    }
+    else if (!strcmp(compiler, "pgi")){
+        arg = 6;
+    }
+    else {
+        arg = 2;
+    }
+
     M = (int)sqrt((double)(arg * 1024.0 * 512.0 * nbProcs)/sizeof(double));
     nbLines = (M / nbProcs)+3;
     h = (double *) malloc(sizeof(double *) * M * nbLines);
@@ -168,8 +222,10 @@ int main(int argc, char** argv)
             MPI_Finalize();
             return 1;
         }
-        else if (rank == 0 && checkpointed == FTI_DONE) {
-            printf("Checkpoint made i = %d\n", i);
+        else if (fail && checkpointed == FTI_DONE) {
+            if (rank == 0)
+                printf("Checkpoint made. Stoped at i = %d\n", i);
+            break;
         }
         else if (rank == 0 && checkpointed == FTI_SCES && i != iTmp) {
             printf("Recovered! i = %d\n", i);
@@ -182,10 +238,6 @@ int main(int argc, char** argv)
             MPI_Allreduce(&localerror, &globalerror, 1, MPI_DOUBLE, MPI_MAX, FTI_COMM_WORLD);
         }
         if (globalerror < PRECISION) {
-            break;
-        }
-        if (fail && i >= ITER_STOP) {
-            printf("%d: Stoped at i = %d.\n", rank, i);
             break;
         }
     }

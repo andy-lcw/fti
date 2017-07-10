@@ -187,9 +187,9 @@ runAllConfiguration() {
 	#run only once for all levels
 	if [ $LEVEL = 1 ]; then
 		startTest nodeFlag $CONFIG $1
-		#slow test at the end
-		startTest heatdis $CONFIG $1
 	fi
+	#slow test at the end
+	startTest heatdis $CONFIG $1 $LEVEL
 }
 
 cd test
