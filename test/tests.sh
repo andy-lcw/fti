@@ -89,14 +89,12 @@ printCorrupt () {
 startTestCorr () {
 	printRun $1 $2 $4
 	cp configs/$2 config.fti
-	mpirun -n $3 ./$1 config.fti $4 1 &> logFile1
+	mpirun -n $3 ./$1 config.fti $4 1
 	rtn=$?
 	if [ $rtn != 0 ]; then
 		echo "Failure. Program returned $rtn code."
-		cat logFile1
 		exit $rtn
 	fi
-	checkLog logFile1 patterns/L"$4"INIT 0
 	if [ $4 != "4" ] || [ $6 != "0" ]; then #corruption only for local checkpoint
 		printCorrupt $5 $6 $7 $4
 		./corrupt config.fti $4 $3 $5 $6 $7 #args: config ckptLevel numberOfProc ckptORPtner corrORErase corruptLevel
@@ -107,18 +105,8 @@ startTestCorr () {
 		fi
 	fi
 	printResume $1 $2 $4
-	mpirun -n $3 ./$1 config.fti $4 0 &> logFile2
-	if [ $4 = "1" ] || [ $4 = "4" ]; then 	#if L1 or L4 test should fail
-		if [ $4 != "4" ] || [ $6 != "0" ]; then #corruption only for local checkpoint
-			checkLog logFile2 patterns/L"$4$6" 1
-		fi
-	elif [ $4 = "2" ] && [ $7 = "2" ]; then		#if L2 and corruptLevel=2 test should fail
-		checkLog logFile2 patterns/L2"$6"2 1
-	else						#else tests should succeed
-		checkLog logFile2 patterns/L"$4$6" 0
-	fi
+	mpirun -n $3 ./$1 config.fti $4 0
 	printSuccess $1 $2 $4
-	rm logFile1 logFile2
 	rm -r ./Local ./Global ./Meta
 }
 
@@ -181,15 +169,15 @@ runAllConfiguration() {
 		fi
 
 	done
-	startTestLogVerify diffSizes $CONFIG $1 $LEVEL 0 #recover from not flushed checkpoints without corrupting
-	startTestLogVerify addInArray $CONFIG $1 $LEVEL 1 #recover from flushed checkpoints without corrupting (L4)
+#	startTestLogVerify diffSizes $CONFIG $1 $LEVEL 0 #recover from not flushed checkpoints without corrupting
+#	startTestLogVerify addInArray $CONFIG $1 $LEVEL 1 #recover from flushed checkpoints without corrupting (L4)
 
 	#run only once for all levels
-	if [ $LEVEL = 1 ]; then
-		startTest nodeFlag $CONFIG $1
+#	if [ $LEVEL = 1 ]; then
+#		startTest nodeFlag $CONFIG $1
 		#slow test at the end
-		startTest heatdis $CONFIG $1
-	fi
+#		startTest heatdis $CONFIG $1
+#	fi
 }
 
 cd test
