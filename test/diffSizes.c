@@ -34,7 +34,7 @@
 
 #define ITERATIONS 111          //iterations
 #define ITER_CHECK 10           //every ITER_CHECK iterations make checkpoint
-#define ITER_STOP 63            //stop work after ITER_STOP iterations
+#define ITER_STOP 11            //stop work after ITER_STOP iterations
 
 #define WORK_DONE 0
 #define VERIFY_FAILED 1
