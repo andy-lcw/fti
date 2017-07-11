@@ -87,6 +87,7 @@ int do_work(int world_rank, int world_size, int checkpoint_level, int fail)
 
     int res;
     int j;
+    int ckptdone = 0;
     int originSize = its.size;
     int addToSize = world_rank * 1024;
 
@@ -147,7 +148,8 @@ int do_work(int world_rank, int world_size, int checkpoint_level, int fail)
     }
     for (; its.i < ITERATIONS; its.i++) {
         //checkpoint after every ITER_CHECK iterations
-        if (its.i%ITER_CHECK == 0) {
+        if (!ckptdone && its.i%ITER_CHECK == 0) {
+            if (!fail) ckptdone = 1;
             FTI_Protect(2, buf, its.size, FTI_LONG);
             res = FTI_Checkpoint(its.i/ITER_CHECK + 1, checkpoint_level);
             if (res != FTI_DONE) {
