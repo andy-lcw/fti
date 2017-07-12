@@ -153,19 +153,18 @@ int FTI_Try(int result, char* message)
 void FTI_InitCritical(int result, char* message, FTIT_execution* FTI_Exec)
 {
     char str[FTI_BUFS];
+    int allResults;
     if (result == FTI_SCES) {
         sprintf(str, "FTI succeeded to %s", message);
-        FTI_Print(str, FTI_DBUG);
     }
     else {
         sprintf(str, "FTI failed to %s", message);
-        FTI_Print(str, FTI_DBUG);
-        int allResults;
-        MPI_Allreduce(&result, &allResults, 1, MPI_INT, MPI_SUM, FTI_Exec->globalComm);
-        if (allResults != FTI_SCES) {
-            FTI_Print("Exiting with status 0.", FTI_DBUG);
-            exit(0);
-        }
+    }
+    FTI_Print(str, FTI_DBUG);
+    MPI_Allreduce(&result, &allResults, 1, MPI_INT, MPI_SUM, FTI_Exec->globalComm);
+    if (allResults != FTI_SCES) {
+        FTI_Print("Exiting with status 1.", FTI_DBUG);
+        exit(1);
     }
 }
 
@@ -184,22 +183,22 @@ void FTI_Critical(int result, char* message, FTIT_configuration* FTI_Conf,
                     FTIT_execution* FTI_Exec, FTIT_topology* FTI_Topo)
 {
     char str[FTI_BUFS];
+    int allResults;
     if (result == FTI_SCES || result == FTI_DONE) {
         sprintf(str, "FTI succeeded to %s", message);
-        FTI_Print(str, FTI_DBUG);
     }
     else {
         sprintf(str, "FTI failed to %s", message);
-        int allResults, endWork = FTI_ENDW;
-        MPI_Allreduce(&result, &allResults, 1, MPI_INT, MPI_SUM, FTI_COMM_WORLD);
-        if (allResults != FTI_SCES) {
-            if (FTI_Topo->nbHeads == 1) {
-                FTI_Print("Sending FTI_ENDW to the head process", FTI_DBUG);
-                MPI_Send(&endWork, 1, MPI_INT, FTI_Topo->headRank, FTI_Conf->tag, FTI_Exec->globalComm);
-            }
-            FTI_Print("Exiting with status 1.", FTI_DBUG);
-            exit(1);
+    }
+    MPI_Allreduce(&result, &allResults, 1, MPI_INT, MPI_SUM, FTI_COMM_WORLD);
+    if (allResults != FTI_SCES) {
+        int endWork = FTI_ENDW;
+        if (FTI_Topo->nbHeads == 1) {
+            FTI_Print("Sending FTI_ENDW to the head process", FTI_DBUG);
+            MPI_Send(&endWork, 1, MPI_INT, FTI_Topo->headRank, FTI_Conf->tag, FTI_Exec->globalComm);
         }
+        FTI_Print("Exiting with status 1.", FTI_DBUG);
+        exit(1);
     }
 }
 
