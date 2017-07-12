@@ -101,7 +101,7 @@ int FTI_VerifyChecksum(char* fileName, char* checksumToCmp)
             fileName, checksum, checksumToCmp);
         FTI_Print(str, FTI_WARN);
         fclose (fd);
-        
+
         return FTI_NSCS;
     }
 
@@ -159,11 +159,12 @@ void FTI_InitCritical(int result, char* message, FTIT_execution* FTI_Exec)
     }
     else {
         sprintf(str, "FTI failed to %s", message);
+        FTI_Print(str, FTI_DBUG);
         int allResults;
         MPI_Allreduce(&result, &allResults, 1, MPI_INT, MPI_SUM, FTI_Exec->globalComm);
         if (allResults != FTI_SCES) {
-            FTI_Print("Exiting with status 1.", FTI_DBUG);
-            exit(1);
+            FTI_Print("Exiting with status 0.", FTI_DBUG);
+            exit(0);
         }
     }
 }
