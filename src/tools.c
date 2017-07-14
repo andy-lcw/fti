@@ -163,8 +163,8 @@ void FTI_InitCritical(int result, char* message, FTIT_execution* FTI_Exec)
     FTI_Print(str, FTI_DBUG);
     MPI_Allreduce(&result, &allResults, 1, MPI_INT, MPI_SUM, FTI_Exec->globalComm);
     if (allResults != FTI_SCES) {
-        FTI_Print("Exiting with status 1.", FTI_DBUG);
-        exit(1);
+        FTI_Print("Exiting with status 0.", FTI_DBUG);
+        exit(0);
     }
 }
 
@@ -197,8 +197,8 @@ void FTI_Critical(int result, char* message, FTIT_configuration* FTI_Conf,
             FTI_Print("Sending FTI_ENDW to the head process", FTI_DBUG);
             MPI_Send(&endWork, 1, MPI_INT, FTI_Topo->headRank, FTI_Conf->tag, FTI_Exec->globalComm);
         }
-        FTI_Print("Exiting with status 1.", FTI_DBUG);
-        exit(1);
+        FTI_Print("Exiting with status 0.", FTI_DBUG);
+        exit(0);
     }
 }
 
